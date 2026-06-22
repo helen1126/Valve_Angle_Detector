@@ -48,6 +48,9 @@ Thumbs.db
 vite.config.js
 vite.config.d.ts
 
+# Dev HTTPS certificates
+.certs/
+
 # Test coverage
 coverage/
 

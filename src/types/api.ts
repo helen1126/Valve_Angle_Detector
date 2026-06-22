@@ -65,6 +65,49 @@ export interface InfoResponse {
   multi_scale_enabled: boolean
 }
 
+// ===== OpenCV (OCV) 方法相关类型 =====
+
+/** 预测方法 */
+export type PredictMethod = 'dl' | 'ocv'
+
+/** OCV 拍摄视角 */
+export type OcvView = 'top' | 'side'
+
+/** OCV 预测参数 */
+export interface OcvPredictOptions {
+  view: OcvView
+  model?: 'ocv'
+}
+
+/** OCV 单张预测响应 */
+export interface OcvPredictResponse {
+  angle: number
+  view: OcvView
+  camera: string
+  model_family: string
+  model_type: string
+  model_version: string
+  elapsed_ms: number
+}
+
+/** OCV 批量预测单项结果（客户端组装） */
+export interface OcvBatchResultItem {
+  filename: string
+  angle: number | null
+  view: OcvView
+  model_family: string | null
+  model_type: string | null
+  model_version: string | null
+  elapsed_ms: number | null
+  error: string | null
+}
+
+/** OCV 批量预测响应（客户端组装） */
+export interface OcvBatchPredictResponse {
+  results: OcvBatchResultItem[]
+  total_time: number
+}
+
 /** API 错误（统一 { detail } 格式） */
 export class ApiError extends Error {
   status: number

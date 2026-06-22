@@ -33,7 +33,17 @@ export function useCamera(): UseCameraReturn {
   const start = useCallback(async () => {
     setError('')
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError('当前环境不支持相机访问（需 HTTPS 或 localhost）')
+      const isHttp = location.protocol === 'http:'
+      const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      if (isHttp && !isLocalhost) {
+        setError(
+          `相机功能需要 HTTPS 环境。请通过 https:// 访问：\n` +
+          `1. 开发环境：已启用 Vite HTTPS，请用 https://${location.host} 访问\n` +
+          `2. 生产环境：部署到 HTTPS 域名或通过 localhost 访问`,
+        )
+      } else {
+        setError('当前浏览器不支持相机访问，请使用 Chrome / Edge / Safari 最新版本')
+      }
       return
     }
     // 先停止旧流

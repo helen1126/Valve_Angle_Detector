@@ -91,7 +91,7 @@ export default function CameraCapture() {
           <div className="card flex flex-col items-center gap-4 py-12">
             <Camera size={48} className="text-slate-300" />
             <p className="text-sm text-slate-500">点击下方按钮启动相机进行拍摄</p>
-            <p className="text-xs text-slate-400">需在 HTTPS 或 localhost 环境下使用，并授予相机权限</p>
+            <p className="text-xs text-slate-400">手机端请通过 https:// 访问本应用（开发服务器已启用 HTTPS）</p>
           </div>
         )}
         <div className="space-y-3">

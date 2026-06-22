@@ -3,15 +3,33 @@ import { useApiConfig } from '@/context/ApiConfigContext'
 import { getHealth } from '@/api/endpoints'
 import { Spinner } from '@/components/ui/Spinner'
 import { HealthBadge } from '@/components/layout/HealthBadge'
-import { Check, RefreshCw, RotateCcw, Save, Server, Cpu, Image as ImageIcon, Settings as SettingsIcon } from 'lucide-react'
+import { Check, RefreshCw, RotateCcw, Save, Server, Cpu, Image as ImageIcon, Settings as SettingsIcon, Code2, Eye, EyeOff, ExternalLink } from 'lucide-react'
 import type { InfoResponse } from '@/types/api'
 
 export default function Settings() {
-  const { baseUrl, setBaseUrl, resetBaseUrl, health, info, refreshInfo } = useApiConfig()
+  const {
+    baseUrl,
+    setBaseUrl,
+    resetBaseUrl,
+    health,
+    info,
+    refreshInfo,
+    ocvBaseUrl,
+    ocvApiKey,
+    setOcvBaseUrl,
+    setOcvApiKey,
+    resetOcvConfig,
+  } = useApiConfig()
   const [draft, setDraft] = useState(baseUrl)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [saved, setSaved] = useState(false)
+
+  // OCV 配置本地草稿
+  const [ocvUrlDraft, setOcvUrlDraft] = useState(ocvBaseUrl)
+  const [ocvKeyDraft, setOcvKeyDraft] = useState(ocvApiKey)
+  const [ocvSaved, setOcvSaved] = useState(false)
+  const [showOcvKey, setShowOcvKey] = useState(false)
 
   function handleSave() {
     setBaseUrl(draft)
@@ -23,6 +41,19 @@ export default function Settings() {
     resetBaseUrl()
     setDraft('http://localhost:8000')
     setTestResult(null)
+  }
+
+  function handleOcvSave() {
+    setOcvBaseUrl(ocvUrlDraft)
+    setOcvApiKey(ocvKeyDraft)
+    setOcvSaved(true)
+    setTimeout(() => setOcvSaved(false), 2000)
+  }
+
+  function handleOcvReset() {
+    resetOcvConfig()
+    setOcvUrlDraft('https://hzkun666-hzkun123.hf.space')
+    setOcvKeyDraft('nuaa_valve_2026')
   }
 
   async function handleTest() {
@@ -102,6 +133,71 @@ export default function Settings() {
           <span className="text-xs text-slate-500">当前服务状态</span>
           <HealthBadge />
         </div>
+      </div>
+
+      {/* OCV 服务配置 */}
+      <div className="card space-y-4 p-4">
+        <div className="flex items-center gap-2">
+          <Code2 size={18} className="text-brand-600" />
+          <h2 className="text-sm font-semibold text-slate-800">OCV 服务配置</h2>
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm text-slate-600">API 地址</label>
+          <input
+            type="text"
+            value={ocvUrlDraft}
+            onChange={(e) => setOcvUrlDraft(e.target.value)}
+            placeholder="https://hzkun666-hzkun123.hf.space"
+            className="input w-full"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-sm text-slate-600">API Key</label>
+          <div className="flex gap-2">
+            <input
+              type={showOcvKey ? 'text' : 'password'}
+              value={ocvKeyDraft}
+              onChange={(e) => setOcvKeyDraft(e.target.value)}
+              placeholder="nuaa_valve_2026"
+              className="input flex-1"
+            />
+            <button
+              type="button"
+              className="btn-secondary btn-md"
+              onClick={() => setShowOcvKey((v) => !v)}
+              title={showOcvKey ? '隐藏' : '显示'}
+            >
+              {showOcvKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button className="btn-primary btn-md flex-1" onClick={handleOcvSave}>
+            {ocvSaved ? <Check size={16} /> : <Save size={16} />}
+            {ocvSaved ? '已保存' : '保存'}
+          </button>
+          <button className="btn-ghost btn-md" onClick={handleOcvReset}>
+            <RotateCcw size={16} />
+            恢复默认
+          </button>
+        </div>
+
+        <a
+          href="https://hzkun666-hzkun123.hf.space/docs"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700"
+        >
+          <ExternalLink size={12} />
+          在线测试文档
+        </a>
+
+        <p className="text-xs text-slate-500">
+          OCV 方法仅支持单张图片预测，批量预测通过客户端循环调用。
+        </p>
       </div>
 
       {/* 模型信息 */}

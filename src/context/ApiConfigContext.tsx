@@ -15,6 +15,12 @@ const DEFAULT_BASE_URL =
 const STORAGE_KEY = 'valve_tool_api_base_url'
 const POLL_INTERVAL = 15_000
 
+// OCV 服务默认配置
+const DEFAULT_OCV_BASE_URL = 'https://hzkun666-hzkun123.hf.space'
+const DEFAULT_OCV_API_KEY = 'nuaa_valve_2026'
+const OCV_URL_STORAGE_KEY = 'valve_tool_ocv_base_url'
+const OCV_KEY_STORAGE_KEY = 'valve_tool_ocv_api_key'
+
 export type HealthState =
   | { status: 'idle' }
   | { status: 'loading' }
@@ -29,6 +35,12 @@ interface ApiConfigValue {
   refreshHealth: () => void
   info: InfoResponse | null
   refreshInfo: () => void
+  // OCV 配置
+  ocvBaseUrl: string
+  ocvApiKey: string
+  setOcvBaseUrl: (url: string) => void
+  setOcvApiKey: (key: string) => void
+  resetOcvConfig: () => void
 }
 
 const ApiConfigContext = createContext<ApiConfigValue | null>(null)
@@ -41,6 +53,14 @@ export function ApiConfigProvider({ children }: { children: ReactNode }) {
   const [health, setHealth] = useState<HealthState>({ status: 'idle' })
   const [info, setInfo] = useState<InfoResponse | null>(null)
 
+  // OCV 配置状态
+  const [ocvBaseUrl, setOcvBaseUrlState] = useState<string>(() => {
+    return localStorage.getItem(OCV_URL_STORAGE_KEY) || DEFAULT_OCV_BASE_URL
+  })
+  const [ocvApiKey, setOcvApiKeyState] = useState<string>(() => {
+    return localStorage.getItem(OCV_KEY_STORAGE_KEY) || DEFAULT_OCV_API_KEY
+  })
+
   const setBaseUrl = useCallback((url: string) => {
     const trimmed = url.trim()
     setBaseUrlState(trimmed)
@@ -50,6 +70,25 @@ export function ApiConfigProvider({ children }: { children: ReactNode }) {
   const resetBaseUrl = useCallback(() => {
     setBaseUrlState(DEFAULT_BASE_URL)
     localStorage.removeItem(STORAGE_KEY)
+  }, [])
+
+  const setOcvBaseUrl = useCallback((url: string) => {
+    const trimmed = url.trim()
+    setOcvBaseUrlState(trimmed)
+    localStorage.setItem(OCV_URL_STORAGE_KEY, trimmed)
+  }, [])
+
+  const setOcvApiKey = useCallback((key: string) => {
+    const trimmed = key.trim()
+    setOcvApiKeyState(trimmed)
+    localStorage.setItem(OCV_KEY_STORAGE_KEY, trimmed)
+  }, [])
+
+  const resetOcvConfig = useCallback(() => {
+    setOcvBaseUrlState(DEFAULT_OCV_BASE_URL)
+    setOcvApiKeyState(DEFAULT_OCV_API_KEY)
+    localStorage.removeItem(OCV_URL_STORAGE_KEY)
+    localStorage.removeItem(OCV_KEY_STORAGE_KEY)
   }, [])
 
   const refreshHealth = useCallback(async () => {
@@ -97,8 +136,26 @@ export function ApiConfigProvider({ children }: { children: ReactNode }) {
       refreshHealth,
       info,
       refreshInfo,
+      ocvBaseUrl,
+      ocvApiKey,
+      setOcvBaseUrl,
+      setOcvApiKey,
+      resetOcvConfig,
     }),
-    [baseUrl, setBaseUrl, resetBaseUrl, health, refreshHealth, info, refreshInfo],
+    [
+      baseUrl,
+      setBaseUrl,
+      resetBaseUrl,
+      health,
+      refreshHealth,
+      info,
+      refreshInfo,
+      ocvBaseUrl,
+      ocvApiKey,
+      setOcvBaseUrl,
+      setOcvApiKey,
+      resetOcvConfig,
+    ],
   )
 
   return (

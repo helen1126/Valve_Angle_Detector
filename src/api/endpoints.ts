@@ -7,7 +7,12 @@ import type {
   VideoFrameMode,
   HealthResponse,
   InfoResponse,
+  OcvPredictOptions,
+  OcvPredictResponse,
+  OcvBatchResultItem,
+  OcvBatchPredictResponse,
 } from '@/types/api'
+import { ApiError } from '@/types/api'
 
 /** POST /predict - 单张图片预测 */
 export function predict(
@@ -64,4 +69,65 @@ export function getHealth(baseUrl: string): Promise<HealthResponse> {
 /** GET /info - 模型信息 */
 export function getInfo(baseUrl: string): Promise<InfoResponse> {
   return apiRequest<InfoResponse>(baseUrl, '/info', { timeoutMs: 5_000 })
+}
+
+// ===== OpenCV (OCV) 方法端点 =====
+
+/** POST /predict/upload - OCV 单张图片预测（文件上传方式） */
+export function predictOcv(
+  baseUrl: string,
+  apiKey: string,
+  file: File,
+  opts: OcvPredictOptions,
+): Promise<OcvPredictResponse> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('view', opts.view)
+  fd.append('model', opts.model ?? 'ocv')
+  return apiRequest<OcvPredictResponse>(baseUrl, '/predict/upload', {
+    method: 'POST',
+    body: fd,
+    headers: { 'X-API-Key': apiKey },
+  })
+}
+
+/** OCV 批量预测（客户端循环调用单张接口） */
+export async function predictOcvBatch(
+  baseUrl: string,
+  apiKey: string,
+  files: File[],
+  opts: OcvPredictOptions,
+): Promise<OcvBatchPredictResponse> {
+  const results: OcvBatchResultItem[] = []
+  const startTime = performance.now()
+  for (const file of files) {
+    try {
+      const res = await predictOcv(baseUrl, apiKey, file, opts)
+      results.push({
+        filename: file.name,
+        angle: res.angle,
+        view: res.view,
+        model_family: res.model_family,
+        model_type: res.model_type,
+        model_version: res.model_version,
+        elapsed_ms: res.elapsed_ms,
+        error: null,
+      })
+    } catch (err) {
+      results.push({
+        filename: file.name,
+        angle: null,
+        view: opts.view,
+        model_family: null,
+        model_type: null,
+        model_version: null,
+        elapsed_ms: null,
+        error: err instanceof ApiError ? err.detail : '预测失败',
+      })
+    }
+  }
+  return {
+    results,
+    total_time: (performance.now() - startTime) / 1000,
+  }
 }

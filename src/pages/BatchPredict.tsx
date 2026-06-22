@@ -2,20 +2,31 @@ import { useState } from 'react'
 import { FileDropzone } from '@/components/ui/FileDropzone'
 import { Spinner } from '@/components/ui/Spinner'
 import { BatchResultTable } from '@/components/predict/BatchResultTable'
+import { MethodSelector } from '@/components/predict/MethodSelector'
+import { OcvParamPanel } from '@/components/predict/OcvParamPanel'
 import { useApiConfig } from '@/context/ApiConfigContext'
-import { predictBatch } from '@/api/endpoints'
-import { ApiError, type BatchPredictResponse } from '@/types/api'
+import { predictBatch, predictOcvBatch } from '@/api/endpoints'
+import {
+  ApiError,
+  type BatchPredictResponse,
+  type PredictMethod,
+  type OcvPredictOptions,
+  type OcvBatchPredictResponse,
+} from '@/types/api'
 import { isAcceptedImage, isZipFile, extractImagesFromZip } from '@/utils/file'
 import { formatTime, formatSize } from '@/utils/format'
 import { downloadCsv, downloadJson } from '@/utils/download'
 import { AlertCircle, FileArchive, Images, Trash2, Download } from 'lucide-react'
 
 export default function BatchPredict() {
-  const { baseUrl } = useApiConfig()
+  const { baseUrl, ocvBaseUrl, ocvApiKey } = useApiConfig()
+  const [method, setMethod] = useState<PredictMethod>('dl')
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [result, setResult] = useState<BatchPredictResponse | null>(null)
+  const [ocvResult, setOcvResult] = useState<OcvBatchPredictResponse | null>(null)
+  const [ocvParams, setOcvParams] = useState<OcvPredictOptions>({ view: 'top' })
   const [error, setError] = useState('')
 
   async function addFiles(newFiles: File[]) {
@@ -46,6 +57,7 @@ export default function BatchPredict() {
   function clearAll() {
     setFiles([])
     setResult(null)
+    setOcvResult(null)
     setError('')
   }
 
@@ -54,9 +66,15 @@ export default function BatchPredict() {
     setLoading(true)
     setError('')
     setResult(null)
+    setOcvResult(null)
     try {
-      const res = await predictBatch(baseUrl, files)
-      setResult(res)
+      if (method === 'dl') {
+        const res = await predictBatch(baseUrl, files)
+        setResult(res)
+      } else {
+        const res = await predictOcvBatch(ocvBaseUrl, ocvApiKey, files, ocvParams)
+        setOcvResult(res)
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : '批量预测失败，请检查服务状态')
     } finally {
@@ -64,21 +82,44 @@ export default function BatchPredict() {
     }
   }
 
-  const successCount = result?.results.filter((r) => r.error === null).length ?? 0
-  const failCount = result ? result.results.length - successCount : 0
+  const currentResults = method === 'dl' ? result?.results : ocvResult?.results
+  const successCount = currentResults?.filter((r) => r.error === null).length ?? 0
+  const failCount = currentResults ? currentResults.length - successCount : 0
+  const totalTime = method === 'dl' ? result?.total_time : ocvResult?.total_time
 
   function exportCsv() {
-    if (!result) return
-    downloadCsv(
-      result.results as unknown as Record<string, unknown>[],
-      [
-        { key: 'filename', label: '文件名' },
-        { key: 'angle', label: '角度' },
-        { key: 'time', label: '耗时(秒)' },
-        { key: 'error', label: '错误' },
-      ],
-      `batch_${Date.now()}.csv`,
-    )
+    if (method === 'dl' && result) {
+      downloadCsv(
+        result.results as unknown as Record<string, unknown>[],
+        [
+          { key: 'filename', label: '文件名' },
+          { key: 'angle', label: '角度' },
+          { key: 'time', label: '耗时(秒)' },
+          { key: 'error', label: '错误' },
+        ],
+        `batch_dl_${Date.now()}.csv`,
+      )
+    } else if (method === 'ocv' && ocvResult) {
+      downloadCsv(
+        ocvResult.results as unknown as Record<string, unknown>[],
+        [
+          { key: 'filename', label: '文件名' },
+          { key: 'angle', label: '角度' },
+          { key: 'view', label: '视角' },
+          { key: 'model_version', label: '模型版本' },
+          { key: 'elapsed_ms', label: '耗时(ms)' },
+          { key: 'error', label: '错误' },
+        ],
+        `batch_ocv_${Date.now()}.csv`,
+      )
+    }
+  }
+
+  function exportJson() {
+    const data = method === 'dl' ? result : ocvResult
+    if (data) {
+      downloadJson(data, `batch_${method}_${Date.now()}.json`)
+    }
   }
 
   return (
@@ -93,6 +134,12 @@ export default function BatchPredict() {
         )}
       </div>
 
+      <MethodSelector value={method} onChange={setMethod} />
+
+      {method === 'ocv' && (
+        <OcvParamPanel value={ocvParams} onChange={setOcvParams} />
+      )}
+
       <FileDropzone
         onFiles={addFiles}
         accept="image/jpeg,image/png,image/bmp,.zip,.jpg,.jpeg,.png,.bmp"
@@ -105,6 +152,13 @@ export default function BatchPredict() {
           多选图片或 zip 压缩包
         </div>
       </FileDropzone>
+
+      {method === 'ocv' && (
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-700">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          <span>OCV 批量预测通过客户端循环调用单张接口，文件较多时耗时较长。</span>
+        </div>
+      )}
 
       {extracting && (
         <div className="flex items-center gap-2 rounded-lg bg-brand-50 p-2.5 text-sm text-brand-700">
@@ -153,12 +207,12 @@ export default function BatchPredict() {
       )}
 
       {/* 结果汇总 */}
-      {result && (
+      {currentResults && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="card p-3 text-center">
               <div className="text-xs text-slate-400">总文件数</div>
-              <div className="text-xl font-bold text-slate-900">{result.results.length}</div>
+              <div className="text-xl font-bold text-slate-900">{currentResults.length}</div>
             </div>
             <div className="card p-3 text-center">
               <div className="text-xs text-slate-400">成功</div>
@@ -170,7 +224,7 @@ export default function BatchPredict() {
             </div>
             <div className="card p-3 text-center">
               <div className="text-xs text-slate-400">总耗时</div>
-              <div className="text-xl font-bold text-slate-900">{formatTime(result.total_time)}</div>
+              <div className="text-xl font-bold text-slate-900">{formatTime(totalTime ?? 0)}</div>
             </div>
           </div>
 
@@ -182,26 +236,71 @@ export default function BatchPredict() {
                   <Download size={14} />
                   CSV
                 </button>
-                <button
-                  className="btn-secondary btn-sm"
-                  onClick={() => downloadJson(result, `batch_${Date.now()}.json`)}
-                >
+                <button className="btn-secondary btn-sm" onClick={exportJson}>
                   <Download size={14} />
                   JSON
                 </button>
               </div>
             </div>
-            <BatchResultTable results={result.results} />
+            {method === 'dl' && result ? (
+              <BatchResultTable results={result.results} />
+            ) : ocvResult ? (
+              <OcvBatchTable results={ocvResult.results} />
+            ) : null}
           </div>
         </div>
       )}
 
-      {!files.length && !result && (
+      {!files.length && !result && !ocvResult && (
         <div className="card flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
           <FileArchive size={40} />
           <p className="text-sm">上传多张图片或压缩包后开始批量预测</p>
         </div>
       )}
+    </div>
+  )
+}
+
+/** OCV 批量结果表格 */
+function OcvBatchTable({
+  results,
+}: {
+  results: OcvBatchPredictResponse['results']
+}) {
+  return (
+    <div className="max-h-96 overflow-y-auto">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 bg-white">
+          <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+            <th className="py-2 pr-3 font-medium">文件名</th>
+            <th className="px-3 py-2 text-right font-medium">角度</th>
+            <th className="px-3 py-2 text-center font-medium">视角</th>
+            <th className="px-3 py-2 text-center font-medium">模型版本</th>
+            <th className="px-3 py-2 text-right font-medium">耗时(ms)</th>
+            <th className="py-2 pl-3 text-left font-medium">错误</th>
+          </tr>
+        </thead>
+        <tbody>
+          {results.map((r, i) => (
+            <tr key={i} className="border-b border-slate-100 last:border-0">
+              <td className="py-1.5 pr-3 text-slate-600">{r.filename}</td>
+              <td className="px-3 py-1.5 text-right font-medium text-slate-900">
+                {r.angle !== null ? `${r.angle.toFixed(1)}°` : '-'}
+              </td>
+              <td className="px-3 py-1.5 text-center text-slate-500">
+                {r.view === 'top' ? '俯视' : '侧视'}
+              </td>
+              <td className="px-3 py-1.5 text-center text-slate-500">
+                {r.model_version ?? '-'}
+              </td>
+              <td className="px-3 py-1.5 text-right text-slate-500">
+                {r.elapsed_ms !== null ? r.elapsed_ms.toFixed(1) : '-'}
+              </td>
+              <td className="py-1.5 pl-3 text-left text-red-600">{r.error ?? ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

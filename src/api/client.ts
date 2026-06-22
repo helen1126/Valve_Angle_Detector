@@ -15,6 +15,7 @@ interface RequestOptions {
   body?: FormData
   params?: Record<string, unknown>
   timeoutMs?: number
+  headers?: Record<string, string>
 }
 
 /** fetch 封装：动态 baseURL、超时、统一错误解析 */
@@ -23,7 +24,7 @@ export async function apiRequest<T>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, params, timeoutMs = 60_000 } = opts
+  const { method = 'GET', body, params, timeoutMs = 60_000, headers } = opts
   const url = `${baseUrl.replace(/\/$/, '')}${path}${buildQuery(params || {})}`
 
   const controller = new AbortController()
@@ -34,6 +35,7 @@ export async function apiRequest<T>(
       method,
       body,
       signal: controller.signal,
+      headers,
     })
 
     if (!res.ok) {

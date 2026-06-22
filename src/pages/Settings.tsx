@@ -52,7 +52,7 @@ export default function Settings() {
 
   function handleOcvReset() {
     resetOcvConfig()
-    setOcvUrlDraft('https://hzkun666-hzkun123.hf.space')
+    setOcvUrlDraft('http://localhost:8001')
     setOcvKeyDraft('nuaa_valve_2026')
   }
 
@@ -148,7 +148,7 @@ export default function Settings() {
             type="text"
             value={ocvUrlDraft}
             onChange={(e) => setOcvUrlDraft(e.target.value)}
-            placeholder="https://hzkun666-hzkun123.hf.space"
+            placeholder="http://localhost:8001"
             className="input w-full"
           />
         </div>

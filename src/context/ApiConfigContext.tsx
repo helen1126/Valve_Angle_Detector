@@ -16,7 +16,7 @@ const STORAGE_KEY = 'valve_tool_api_base_url'
 const POLL_INTERVAL = 15_000
 
 // OCV 服务默认配置
-const DEFAULT_OCV_BASE_URL = 'https://hzkun666-hzkun123.hf.space'
+const DEFAULT_OCV_BASE_URL = 'http://localhost:8001'
 const DEFAULT_OCV_API_KEY = 'nuaa_valve_2026'
 const OCV_URL_STORAGE_KEY = 'valve_tool_ocv_base_url'
 const OCV_KEY_STORAGE_KEY = 'valve_tool_ocv_api_key'

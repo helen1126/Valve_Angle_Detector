@@ -3,23 +3,35 @@ import { FileDropzone } from '@/components/ui/FileDropzone'
 import { Spinner } from '@/components/ui/Spinner'
 import { FrameModeSelector } from '@/components/video/FrameModeSelector'
 import { VideoAngleChart } from '@/components/video/VideoAngleChart'
+import { MethodSelector } from '@/components/predict/MethodSelector'
+import { OcvParamPanel } from '@/components/predict/OcvParamPanel'
 import { useApiConfig } from '@/context/ApiConfigContext'
-import { predictVideo } from '@/api/endpoints'
-import { ApiError, type VideoFrameMode, type VideoPredictResponse } from '@/types/api'
+import { predictVideo, predictOcvVideo } from '@/api/endpoints'
+import {
+  ApiError,
+  type PredictMethod,
+  type VideoFrameMode,
+  type VideoPredictResponse,
+  type OcvPredictOptions,
+  type OcvVideoPredictResponse,
+} from '@/types/api'
 import { isAcceptedVideo } from '@/utils/file'
 import { formatTime, formatAngle, formatTimestamp } from '@/utils/format'
 import { downloadCsv, downloadJson } from '@/utils/download'
 import { AlertCircle, Video, Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function VideoPredict() {
-  const { baseUrl } = useApiConfig()
+  const { baseUrl, ocvBaseUrl, ocvApiKey } = useApiConfig()
+  const [method, setMethod] = useState<PredictMethod>('dl')
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState('')
   const [mode, setMode] = useState<VideoFrameMode>('fps')
   const [fpsValue, setFpsValue] = useState(2)
   const [intervalValue, setIntervalValue] = useState(30)
+  const [ocvParams, setOcvParams] = useState<OcvPredictOptions>({ view: 'top' })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<VideoPredictResponse | null>(null)
+  const [ocvResult, setOcvResult] = useState<OcvVideoPredictResponse | null>(null)
   const [error, setError] = useState('')
   const [showTable, setShowTable] = useState(false)
 
@@ -33,10 +45,12 @@ export default function VideoPredict() {
     return () => URL.revokeObjectURL(url)
   }, [file])
 
+  // 重置结果当文件、方法或参数变化
   useEffect(() => {
     setResult(null)
+    setOcvResult(null)
     setError('')
-  }, [file, mode, fpsValue, intervalValue])
+  }, [file, mode, fpsValue, intervalValue, method, ocvParams])
 
   function handleFiles(files: File[]) {
     const f = files[0]
@@ -52,10 +66,16 @@ export default function VideoPredict() {
     setLoading(true)
     setError('')
     setResult(null)
+    setOcvResult(null)
     try {
       const value = mode === 'fps' ? fpsValue : intervalValue
-      const res = await predictVideo(baseUrl, file, mode, value)
-      setResult(res)
+      if (method === 'dl') {
+        const res = await predictVideo(baseUrl, file, mode, value)
+        setResult(res)
+      } else {
+        const res = await predictOcvVideo(ocvBaseUrl, ocvApiKey, file, ocvParams, mode, value)
+        setOcvResult(res)
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : '视频预测失败，请检查服务状态')
     } finally {
@@ -63,6 +83,7 @@ export default function VideoPredict() {
     }
   }
 
+  // DL 统计
   const stats = useMemo(() => {
     if (!result?.results.length) return null
     const angles = result.results.map((r) => r.angle)
@@ -72,6 +93,17 @@ export default function VideoPredict() {
       min: Math.min(...angles),
     }
   }, [result])
+
+  // OCV 统计
+  const ocvStats = useMemo(() => {
+    if (!ocvResult?.results.length) return null
+    const angles = ocvResult.results.map((r) => r.angle)
+    return {
+      avg: angles.reduce((a, b) => a + b, 0) / angles.length,
+      max: Math.max(...angles),
+      min: Math.min(...angles),
+    }
+  }, [ocvResult])
 
   function exportCsv() {
     if (!result) return
@@ -87,6 +119,28 @@ export default function VideoPredict() {
     )
   }
 
+  function exportOcvCsv() {
+    if (!ocvResult) return
+    const rows = ocvResult.results.map((r) => ({
+      frame_index: r.frame_index,
+      timestamp_sec: r.timestamp_sec,
+      angle: r.angle,
+      model_family: r.model_family,
+      model_type: r.model_type,
+    }))
+    downloadCsv(
+      rows as unknown as Record<string, unknown>[],
+      [
+        { key: 'frame_index', label: '帧索引' },
+        { key: 'timestamp_sec', label: '时间戳(秒)' },
+        { key: 'angle', label: '角度' },
+        { key: 'model_family', label: '模型族' },
+        { key: 'model_type', label: '模型类型' },
+      ],
+      `ocv_video_${Date.now()}.csv`,
+    )
+  }
+
   const currentValue = mode === 'fps' ? fpsValue : intervalValue
 
   return (
@@ -94,6 +148,8 @@ export default function VideoPredict() {
       {/* 左侧：上传 + 参数 */}
       <div className="space-y-4">
         <h1 className="text-lg font-semibold text-slate-900 md:text-xl">视频抽帧预测</h1>
+
+        <MethodSelector value={method} onChange={setMethod} />
 
         {file ? (
           <div className="card overflow-hidden">
@@ -124,6 +180,10 @@ export default function VideoPredict() {
               视频文件
             </div>
           </FileDropzone>
+        )}
+
+        {method === 'ocv' && (
+          <OcvParamPanel value={ocvParams} onChange={setOcvParams} />
         )}
 
         <FrameModeSelector
@@ -159,14 +219,15 @@ export default function VideoPredict() {
           </div>
         )}
 
-        {!loading && !result && !error && (
+        {!loading && !result && !ocvResult && !error && (
           <div className="card flex flex-col items-center justify-center gap-2 py-16 text-slate-400">
             <Video size={40} />
             <p className="text-sm">上传视频后将显示抽帧预测结果</p>
           </div>
         )}
 
-        {result && !loading && (
+        {/* DL 结果 */}
+        {result && !loading && method === 'dl' && (
           <div className="space-y-4">
             {/* 统计卡片 */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -248,6 +309,111 @@ export default function VideoPredict() {
                           <td className="px-3 py-1.5 text-right text-slate-500">{formatTimestamp(r.timestamp)}</td>
                           <td className="px-3 py-1.5 text-right font-medium text-slate-900">{formatAngle(r.angle)}</td>
                           <td className="py-1.5 pl-3 text-right text-slate-500">{formatTime(r.time)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* OCV 结果 */}
+        {ocvResult && !loading && method === 'ocv' && (
+          <div className="space-y-4">
+            {/* 统计卡片 */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              <div className="card p-3 text-center">
+                <div className="text-xs text-slate-400">总帧数</div>
+                <div className="text-lg font-bold text-slate-900">{ocvResult.total_frames}</div>
+              </div>
+              <div className="card p-3 text-center">
+                <div className="text-xs text-slate-400">已抽取</div>
+                <div className="text-lg font-bold text-slate-900">{ocvResult.extracted_frames}</div>
+              </div>
+              <div className="card p-3 text-center">
+                <div className="text-xs text-slate-400">源 FPS</div>
+                <div className="text-lg font-bold text-slate-900">{ocvResult.source_fps.toFixed(1)}</div>
+              </div>
+              <div className="card p-3 text-center">
+                <div className="text-xs text-slate-400">总耗时</div>
+                <div className="text-lg font-bold text-slate-900">{formatTime(ocvResult.elapsed_ms / 1000)}</div>
+              </div>
+              {ocvStats && (
+                <>
+                  <div className="card p-3 text-center">
+                    <div className="text-xs text-slate-400">平均角度</div>
+                    <div className="text-lg font-bold text-brand-600">{ocvStats.avg.toFixed(1)}°</div>
+                  </div>
+                  <div className="card p-3 text-center">
+                    <div className="text-xs text-slate-400">最大角度</div>
+                    <div className="text-lg font-bold text-red-600">{ocvStats.max.toFixed(1)}°</div>
+                  </div>
+                  <div className="card p-3 text-center">
+                    <div className="text-xs text-slate-400">最小角度</div>
+                    <div className="text-lg font-bold text-green-600">{ocvStats.min.toFixed(1)}°</div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 曲线图 */}
+            <div className="card p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-700">角度-时间曲线</h3>
+              <VideoAngleChart
+                results={ocvResult.results.map((r) => ({
+                  frame_idx: r.frame_index,
+                  timestamp: r.timestamp_sec,
+                  angle: r.angle,
+                }))}
+              />
+            </div>
+
+            {/* 数据表 */}
+            <div className="card p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <button
+                  className="flex items-center gap-1 text-sm font-semibold text-slate-700"
+                  onClick={() => setShowTable((v) => !v)}
+                >
+                  {showTable ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  帧数据明细（{ocvResult.results.length} 条）
+                </button>
+                <div className="flex gap-2">
+                  <button className="btn-secondary btn-sm" onClick={exportOcvCsv}>
+                    <Download size={14} />
+                    CSV
+                  </button>
+                  <button
+                    className="btn-secondary btn-sm"
+                    onClick={() => downloadJson(ocvResult, `ocv_video_${Date.now()}.json`)}
+                  >
+                    <Download size={14} />
+                    JSON
+                  </button>
+                </div>
+              </div>
+              {showTable && (
+                <div className="max-h-64 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-white">
+                      <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+                        <th className="py-2 pr-3 font-medium">帧索引</th>
+                        <th className="px-3 py-2 text-right font-medium">时间戳</th>
+                        <th className="px-3 py-2 text-right font-medium">角度</th>
+                        <th className="px-3 py-2 text-right font-medium">模型族</th>
+                        <th className="py-2 pl-3 text-right font-medium">模型类型</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ocvResult.results.map((r, i) => (
+                        <tr key={i} className="border-b border-slate-100 last:border-0">
+                          <td className="py-1.5 pr-3 text-slate-600">{r.frame_index}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-500">{formatTimestamp(r.timestamp_sec)}</td>
+                          <td className="px-3 py-1.5 text-right font-medium text-slate-900">{formatAngle(r.angle)}</td>
+                          <td className="px-3 py-1.5 text-right text-slate-500">{r.model_family}</td>
+                          <td className="py-1.5 pl-3 text-right text-slate-500">{r.model_type}</td>
                         </tr>
                       ))}
                     </tbody>

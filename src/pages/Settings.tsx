@@ -39,7 +39,7 @@ export default function Settings() {
 
   function handleReset() {
     resetBaseUrl()
-    setDraft('http://localhost:8000')
+    setDraft(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
     setTestResult(null)
   }
 
@@ -52,8 +52,8 @@ export default function Settings() {
 
   function handleOcvReset() {
     resetOcvConfig()
-    setOcvUrlDraft('http://localhost:8001')
-    setOcvKeyDraft('nuaa_valve_2026')
+    setOcvUrlDraft(import.meta.env.VITE_OCV_BASE_URL || 'http://localhost:8001')
+    setOcvKeyDraft(import.meta.env.VITE_OCV_API_KEY || 'nuaa_valve_2026')
   }
 
   async function handleTest() {

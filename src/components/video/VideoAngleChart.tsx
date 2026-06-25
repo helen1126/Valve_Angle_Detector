@@ -8,10 +8,16 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts'
-import type { VideoFrameResult } from '@/types/api'
+
+/** 图表所需的最小字段集，兼容 VideoFrameResult 与 LiveFrameResult */
+interface ChartFrame {
+  timestamp: number
+  angle: number
+  frame_idx: number
+}
 
 interface VideoAngleChartProps {
-  results: VideoFrameResult[]
+  results: ChartFrame[]
 }
 
 export function VideoAngleChart({ results }: VideoAngleChartProps) {

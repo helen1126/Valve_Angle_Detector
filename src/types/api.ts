@@ -108,6 +108,38 @@ export interface OcvBatchPredictResponse {
   total_time: number
 }
 
+/** OCV 视频抽帧单帧结果 */
+export interface OcvVideoFrameResult {
+  frame_index: number
+  timestamp_sec: number
+  angle: number
+  view: OcvView
+  camera: string
+  model_family: string
+  model_type: string
+  model_version: string
+  features: Record<string, number>
+}
+
+/** OCV 视频抽帧预测响应 */
+export interface OcvVideoPredictResponse {
+  total_frames: number
+  extracted_frames: number
+  source_fps: number
+  results: OcvVideoFrameResult[]
+  elapsed_ms: number
+}
+
+/** 实时预测单帧结果（客户端组装） */
+export interface LiveFrameResult {
+  frame_idx: number
+  timestamp: number
+  angle: number
+  elapsed_ms: number
+  method: PredictMethod
+  error: string | null
+}
+
 /** API 错误（统一 { detail } 格式） */
 export class ApiError extends Error {
   status: number

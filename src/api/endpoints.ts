@@ -11,6 +11,7 @@ import type {
   OcvPredictResponse,
   OcvBatchResultItem,
   OcvBatchPredictResponse,
+  OcvVideoPredictResponse,
 } from '@/types/api'
 import { ApiError } from '@/types/api'
 
@@ -130,4 +131,33 @@ export async function predictOcvBatch(
     results,
     total_time: (performance.now() - startTime) / 1000,
   }
+}
+
+/** POST /predict/video - OCV 视频抽帧预测 */
+export function predictOcvVideo(
+  baseUrl: string,
+  apiKey: string,
+  file: File,
+  opts: OcvPredictOptions,
+  mode: VideoFrameMode,
+  value: number,
+): Promise<OcvVideoPredictResponse> {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('view', opts.view)
+  fd.append('model', opts.model ?? 'ocv')
+  // OCV 的 mode 值为 'fps' 或 'interval'（DL 用 'frame_interval'）
+  const ocvMode = mode === 'frame_interval' ? 'interval' : 'fps'
+  fd.append('mode', ocvMode)
+  if (mode === 'fps') {
+    fd.append('fps', String(value))
+  } else {
+    fd.append('frame_interval', String(value))
+  }
+  return apiRequest<OcvVideoPredictResponse>(baseUrl, '/predict/video', {
+    method: 'POST',
+    body: fd,
+    headers: { 'X-API-Key': apiKey },
+    timeoutMs: 300_000,
+  })
 }

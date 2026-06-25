@@ -1,16 +1,24 @@
 # 阀门角度检测系统
 
-基于 React + TypeScript + Vite 构建的响应式前端应用，对接 FastAPI 后端，提供阀门角度预测的完整可视化交互能力。支持单张/批量/视频三种预测模式、移动端相机拍摄（含蒙版叠加）、API 配置与健康状态监控。
+基于 React + TypeScript + Vite 构建的响应式前端应用，对接 FastAPI 后端，提供阀门角度预测的完整可视化交互能力。支持单张/批量/视频/实时四种预测模式、双预测方法（深度学习 + OpenCV）、移动端相机拍摄（含蒙版叠加）、API 配置与健康状态监控。
 
 ## 功能特性
 
-### 三大预测模式
+### 四大预测模式
 
 | 模式 | 接口 | 说明 |
 |------|------|------|
 | 单张预测 | `POST /predict` | 上传单张图片，支持 `return_image` / `smart_crop` / `multi_scale` 全参数，SVG 角度仪表盘可视化，标注图下载 |
 | 批量预测 | `POST /predict/batch` | 多文件上传 + zip 压缩包自动解压，汇总统计（成功/失败/总耗时），结果导出 CSV/JSON |
 | 视频预测 | `POST /predict/video` | `fps` / `frame_interval` 二选一抽帧，Recharts 角度-时间曲线，统计卡片（平均/最大/最小角度），可折叠帧数据表 |
+| 实时预测 | 摄像头实时流 | 调用设备摄像头实时预测，支持双预测方法切换，可调节预测间隔，实时角度曲线与历史记录导出 |
+
+### 双预测方法
+
+| 方法 | 说明 | 特点 |
+|------|------|------|
+| 深度学习 (DL) | 高精度神经网络模型 | 返回标注图片，支持智能裁剪和多尺度推理 |
+| OpenCV (OCV) | 传统计算机视觉方法 | 响应更快，支持俯视/侧视两种拍摄视角 |
 
 ### 移动端相机拍摄
 
@@ -22,6 +30,7 @@
 ### API 配置与监控
 
 - UI 可修改 API Base URL（默认 `http://localhost:8000`），持久化到 `localStorage`
+- 支持 OCV 服务独立配置（Base URL 默认 `http://localhost:8001`，API Key 默认 `nuaa_valve_2026`）
 - 测试连接功能，15 秒轮询 `/health` 实时显示服务状态徽标
 - 展示 `/info` 返回的模型信息（架构、权重路径、输入尺寸、设备等）与服务端默认配置
 
@@ -72,10 +81,11 @@ Valve_Tool/
 │   │   └── masks.ts                # 蒙版元数据
 │   ├── hooks/
 │   │   └── useCamera.ts            # 相机访问封装
-│   ├── pages/                      # 5 个路由页面
+│   ├── pages/                      # 6 个路由页面
 │   │   ├── SinglePredict.tsx
 │   │   ├── BatchPredict.tsx
 │   │   ├── VideoPredict.tsx
+│   │   ├── LivePredict.tsx
 │   │   ├── CameraCapture.tsx
 │   │   └── Settings.tsx
 │   ├── types/
@@ -125,7 +135,12 @@ npm run preview
 复制 `.env.example` 为 `.env.local` 并按需修改：
 
 ```bash
+# 深度学习服务
 VITE_API_BASE_URL=http://localhost:8000
+
+# OpenCV 服务
+VITE_OCV_BASE_URL=http://localhost:8001
+VITE_OCV_API_KEY=nuaa_valve_2026
 ```
 
 也可在应用内「设置」页直接修改 API 地址，无需重启。
@@ -135,12 +150,14 @@ VITE_API_BASE_URL=http://localhost:8000
 ### 单张预测
 
 1. 进入「单张」页面
-2. 点击或拖拽上传阀门图片（支持 jpg/jpeg/png/bmp）
-3. 在「预测参数」面板调整选项：
-   - **返回标注图片**：响应中包含 base64 标注图
-   - **智能裁剪**：远距离拍摄自动定位放大阀门区域
-   - **多尺度推理**：结合原图和裁剪图预测，精度更高（优先级高于智能裁剪）
-4. 点击「开始预测」，查看角度仪表盘与标注图
+2. 选择预测方法：
+   - **深度学习 (DL)**：高精度神经网络模型，返回标注图片
+   - **OpenCV (OCV)**：传统计算机视觉方法，响应更快
+3. 点击或拖拽上传阀门图片（支持 jpg/jpeg/png/bmp）
+4. 在「预测参数」面板调整选项：
+   - **DL 方法**：返回标注图片、智能裁剪、多尺度推理
+   - **OCV 方法**：拍摄视角（俯视 top / 侧视 side）
+5. 点击「开始预测」，查看角度仪表盘与标注图
 
 ### 批量预测
 
@@ -157,6 +174,16 @@ VITE_API_BASE_URL=http://localhost:8000
    - **按每秒帧数 (fps)**：滑块调整 0.5~10
    - **按帧间隔 (frame_interval)**：数字输入 1~300
 4. 点击「开始视频预测」，查看角度-时间曲线与统计
+
+### 实时预测
+
+1. 进入「实时」页面
+2. 选择预测方法（深度学习 DL / OpenCV OCV）
+3. 若选择 OCV 方法，选择拍摄视角（俯视 top / 侧视 side）
+4. 调整预测间隔（100ms ~ 2000ms）
+5. 点击「启动相机」，授予相机权限
+6. 点击「开始预测」，实时查看角度曲线与历史记录
+7. 支持导出 CSV 记录、清空历史数据
 
 ### 移动端拍摄
 
@@ -175,6 +202,8 @@ VITE_API_BASE_URL=http://localhost:8000
 
 ## API 接口对照
 
+### 深度学习服务 (DL)
+
 | 前端功能 | 后端接口 | 方法 |
 |----------|----------|------|
 | 单张预测 | `/predict` | POST |
@@ -182,6 +211,13 @@ VITE_API_BASE_URL=http://localhost:8000
 | 视频抽帧 | `/predict/video` | POST |
 | 健康检查 | `/health` | GET |
 | 模型信息 | `/info` | GET |
+
+### OpenCV 服务 (OCV)
+
+| 前端功能 | 后端接口 | 方法 |
+|----------|----------|------|
+| 单张预测 | `/predict/upload` | POST |
+| 健康检查 | `/health` | GET |
 
 详细参数与响应格式参见 [docs/API文档.md](docs/API文档.md)。
 

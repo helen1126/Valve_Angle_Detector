@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Image, Images, Video, Camera, Settings, Gauge } from 'lucide-react'
+import { Image, Images, Video, Camera, Settings, Gauge, Activity } from 'lucide-react'
 import { HealthBadge } from './HealthBadge'
 
 const NAV_ITEMS = [
   { to: '/', label: '单张', icon: Image, end: true },
   { to: '/batch', label: '批量', icon: Images, end: false },
   { to: '/video', label: '视频', icon: Video, end: false },
+  { to: '/live', label: '实时', icon: Activity, end: false },
   { to: '/camera', label: '拍摄', icon: Camera, end: false },
   { to: '/settings', label: '设置', icon: Settings, end: false },
 ]

@@ -7,11 +7,14 @@ interface UseCameraReturn {
   active: boolean
   error: string
   facingMode: FacingMode
+  zoom: number
+  zoomRange: { min: number; max: number; step: number } | null
   start: () => Promise<void>
   stop: () => void
   switchCamera: () => void
   capture: () => File | null
   focusAt: (x: number, y: number) => void
+  setZoom: (z: number) => void
 }
 
 export function useCamera(): UseCameraReturn {
@@ -20,6 +23,8 @@ export function useCamera(): UseCameraReturn {
   const [active, setActive] = useState(false)
   const [error, setError] = useState('')
   const [facingMode, setFacingMode] = useState<FacingMode>('environment')
+  const [zoom, setZoomState] = useState(1)
+  const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null)
 
   const stop = useCallback(() => {
     if (streamRef.current) {
@@ -53,13 +58,28 @@ export function useCamera(): UseCameraReturn {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       })
       streamRef.current = stream
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play().catch(() => {})
+      }
+      // 读取 zoom 能力（渐进增强，不支持则保持 null）
+      const track = stream.getVideoTracks()[0]
+      const capabilities = (track?.getCapabilities?.() ?? {}) as MediaTrackCapabilities & {
+        zoom?: { min: number; max: number; step: number }
+      }
+      if (capabilities.zoom) {
+        setZoomRange({
+          min: capabilities.zoom.min,
+          max: capabilities.zoom.max,
+          step: capabilities.zoom.step,
+        })
+        setZoomState(1)
+      } else {
+        setZoomRange(null)
       }
       setActive(true)
     } catch (err) {
@@ -130,5 +150,18 @@ export function useCamera(): UseCameraReturn {
     }
   }, [])
 
-  return { videoRef, active, error, facingMode, start, stop, switchCamera, capture, focusAt }
+  const setZoom = useCallback((z: number) => {
+    const track = streamRef.current?.getVideoTracks()[0]
+    if (!track) return
+    try {
+      track.applyConstraints({
+        advanced: [{ zoom: z } as MediaTrackConstraintSet],
+      })
+      setZoomState(z)
+    } catch {
+      // 不支持则静默忽略
+    }
+  }, [])
+
+  return { videoRef, active, error, facingMode, zoom, zoomRange, start, stop, switchCamera, capture, focusAt, setZoom }
 }
